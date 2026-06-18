@@ -5230,7 +5230,52 @@
         toggleSidebar();
       }
     }
+    // ==================== GITHUB API CONNECTION ====================
+      // Niche diye gaye URL ko apne naye Google Apps Script Web App URL se replace karein
+      const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyIw15Zv1688VIwhYuEDBjbu4mXLlAfsPq8bb-GmadP6waTaC0XdhPfTqG6C-z8HJ2D/exec"; 
 
+      // Ye code google.script.run ko mimic karega taki aapko apna purana code change na karna pade
+      const google = {
+        script: {
+          get run() {
+            let successHandler = null;
+            let failureHandler = null;
+            
+            return new Proxy({}, {
+              get: function(target, prop) {
+                if (prop === 'withSuccessHandler') {
+                  return function(cb) { successHandler = cb; return this; };
+                }
+                if (prop === 'withFailureHandler') {
+                  return function(cb) { failureHandler = cb; return this; };
+                }
+                
+                // Jab koi actual backend function call ho
+                return function(...args) {
+                  fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: prop, args: args }),
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' } // CORS error se bachne ke liye text/plain
+                  })
+                  .then(res => res.json())
+                  .then(data => {
+                    if (data.error) {
+                      if (failureHandler) failureHandler(data.error);
+                      else console.error("Backend Error:", data.error);
+                    } else {
+                      if (successHandler) successHandler(data.result);
+                    }
+                  })
+                  .catch(err => {
+                    if (failureHandler) failureHandler(err.toString());
+                    else console.error("Fetch Error:", err);
+                  });
+                };
+              }
+            });
+          }
+        }
+      };
     // ==================== APP SHORTCUTS ==================== NEEDS EDIT ==========
     function renderMoreApps() {
       const container = document.getElementById('moreAppsContainer');
